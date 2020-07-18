@@ -9,14 +9,20 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.MenuItemCompat
+import androidx.lifecycle.ViewModel
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.carehome.patient.retrofit.enqueue
 import com.example.myapplication.adapter.NewsListAdapter
+import com.example.myapplication.database.NewsDatabase
+import com.example.myapplication.database.NewsRepository
 import com.example.myapplication.model.NewsResponse
+import com.example.myapplication.model.room.NewsRoom
 import com.example.myapplication.retrofit.ApiClient
 import com.example.myapplication.retrofit.AppRetrofitCallBack
 import kotlinx.android.synthetic.main.activity_pagination.*
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -35,9 +41,17 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
     lateinit var searchView:SearchView
     var searchMode =false
 
+    private lateinit var newsDatabase: NewsDatabase
+    private lateinit var newsRepository: NewsRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pagination)
+
+        newsDatabase = NewsDatabase.getDatabase(applicationContext)
+        newsRepository = NewsRepository(newsDatabase.newsDao())
+      //  deleteNews()
+
 
         setSupportActionBar(tool_bar)
 
@@ -46,10 +60,11 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
         rvList.adapter = customAdapter*/
 
         rvList.layoutManager = LinearLayoutManager(this,LinearLayoutManager.VERTICAL,false)
-        newsListAdapter = NewsListAdapter(this@PaginationActivity,filteredNewsList) { news, i -> onItemClick(news,i) }
+        newsListAdapter = NewsListAdapter(this@PaginationActivity,newsListArrayList) { news, i -> onItemClick(news,i) }
         rvList.adapter = newsListAdapter
 
-
+        // fetch data from local if no network
+       // fetchDataFromLocal()
         setupScrollListener()
 
         getNextNewsApi()
@@ -120,6 +135,8 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
                 page++
                 newsListArrayList.addAll(response.body()!!.news)
                 filteredNewsList.addAll(response.body()!!.news)
+
+                insertNewsToRoom(newsListArrayList)
 
                 newsListAdapter.notifyDataSetChanged()
             }
@@ -218,5 +235,64 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
 
    private fun onItemClick(news: NewsResponse.News,pos: Int){
          Toast.makeText(this,news.title,Toast.LENGTH_SHORT).show()
+    }
+
+    private fun insertNewsToRoom(newsList: List<NewsResponse.News>){
+        GlobalScope.launch {
+            val newsRoomList = ArrayList<NewsRoom>()
+            for (item in newsList){
+                val news = NewsRoom(title = item.title)
+                newsRoomList.add(news)
+            }
+            try {
+                newsRepository.deleteAllNews()
+                newsRepository.insertAll(newsRoomList)
+                val roomList = newsRepository.getAllNews()
+                Log.e("room data size",roomList.size.toString())
+                if (roomList.isNotEmpty()){
+                    newsListArrayList.clear()
+                    for (item in roomList){
+                        val model = NewsResponse.News(title = item.title,image = "")
+                        newsListArrayList.add(model)
+                    }
+                    newsListAdapter.notifyDataSetChanged()
+                }
+
+
+
+            }
+            catch (e:Exception){
+
+            }
+
+
+        }
+    }
+
+    private fun deleteNews(){
+        GlobalScope.launch {
+            newsRepository.deleteAllNews()
+
+        }
+    }
+
+    private fun fetchDataFromLocal(){
+
+        GlobalScope.launch {
+
+            val roomList = newsRepository.getAllNews()
+           // Log.e("room data size",roomList.size.toString())
+            if (roomList.isNotEmpty()){
+                newsListArrayList.clear()
+                for (item in roomList){
+                    val model = NewsResponse.News(title = item.title,image = "")
+                    newsListArrayList.add(model)
+                }
+                newsListAdapter.notifyDataSetChanged()
+            }
+        }
+
+
+
     }
 }

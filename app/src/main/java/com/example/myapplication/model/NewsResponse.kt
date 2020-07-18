@@ -1,5 +1,6 @@
 package com.example.myapplication.model
 
+import androidx.room.Entity
 import com.google.gson.annotations.SerializedName
 
 class NewsResponse{
