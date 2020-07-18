@@ -2,10 +2,17 @@ package com.example.myapplication
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
+import android.widget.Toast
+import androidx.appcompat.widget.SearchView
+import androidx.core.view.MenuItemCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.carehome.patient.retrofit.enqueue
+import com.example.myapplication.adapter.NewsListAdapter
 import com.example.myapplication.model.NewsResponse
 import com.example.myapplication.retrofit.ApiClient
 import com.example.myapplication.retrofit.AppRetrofitCallBack
@@ -21,16 +28,28 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
     var isLoading = false
     var VISIBLE_THRESOLD = 2
     val newsListArrayList = ArrayList<NewsResponse.News>()
+    val filteredNewsList = ArrayList<NewsResponse.News>()
     lateinit var customAdapter: CustomAdapter
+    lateinit var newsListAdapter: NewsListAdapter
     lateinit var newsApiCall: Call<NewsResponse.Response>
+    lateinit var searchView:SearchView
+    var searchMode =false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pagination)
 
+        setSupportActionBar(tool_bar)
+
+       /* rvList.layoutManager = LinearLayoutManager(this,LinearLayoutManager.VERTICAL,false)
+        customAdapter = CustomAdapter(this@PaginationActivity,filteredNewsList,this)
+        rvList.adapter = customAdapter*/
+
         rvList.layoutManager = LinearLayoutManager(this,LinearLayoutManager.VERTICAL,false)
-        customAdapter = CustomAdapter(this@PaginationActivity,newsListArrayList,this)
-        rvList.adapter = customAdapter
+        newsListAdapter = NewsListAdapter(this@PaginationActivity,filteredNewsList) { news, i -> onItemClick(news,i) }
+        rvList.adapter = newsListAdapter
+
+
         setupScrollListener()
 
         getNextNewsApi()
@@ -56,7 +75,7 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
                 if (response.isSuccessful && response.body()!=null){
                     page++
                     newsListArrayList.addAll(response.body()!!.news)
-                    customAdapter.notifyDataSetChanged()
+                    newsListAdapter.notifyDataSetChanged()
 
                 }
             }
@@ -100,7 +119,9 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
                 progressBar?.visibility = View.GONE
                 page++
                 newsListArrayList.addAll(response.body()!!.news)
-                customAdapter.notifyDataSetChanged()
+                filteredNewsList.addAll(response.body()!!.news)
+
+                newsListAdapter.notifyDataSetChanged()
             }
 
             override fun onError(call: Call<NewsResponse.Response>, t: Throwable) {
@@ -120,8 +141,15 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
                 val totalItemCount = layoutManager.itemCount
                 val visibleItemCount = layoutManager.childCount
                 val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+                val lastItemPosition =  layoutManager.findLastCompletelyVisibleItemPosition()
 
-                if (!isLoading &&  lastVisibleItem + VISIBLE_THRESOLD >= totalItemCount){
+                /*if (!isLoading &&  lastVisibleItem + VISIBLE_THRESOLD >= totalItemCount){
+                    // load more
+                    isLoading = true
+                    getNextNewsApi()
+                }*/
+
+                if (!isLoading &&  lastItemPosition == filteredNewsList.size-1){
                     // load more
                     isLoading = true
                     getNextNewsApi()
@@ -137,5 +165,58 @@ class PaginationActivity : AppCompatActivity(), ItemClickListener {
 
     override fun onDestroy() {
         super.onDestroy()
+    }
+
+    //search view
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_search_view, menu)
+        val searchItem = menu.findItem(R.id.action_search)
+        searchView = searchItem.actionView as SearchView
+        searchView.setSubmitButtonEnabled(true)
+        searchView.setQueryHint("Search")
+        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextChange(newText: String): Boolean {
+                 if (newsListArrayList.isEmpty()){
+                     return false
+                 }
+
+                 /*filteredNewsList.clear()
+                 if (newText.trim().toLowerCase().isNotEmpty()){
+                     for (item in newsListArrayList){
+                         if (item.title.toLowerCase().contains(newText.trim().toLowerCase())){
+                             filteredNewsList.add(item)
+                         }
+                     }
+                 }
+                else{
+                     for (item in newsListArrayList){
+                         filteredNewsList.add(item)
+                     }
+                 }
+                 newsListAdapter.notifyDataSetChanged()*/
+
+                // using filterable
+                newsListAdapter.filter.filter(newText)
+
+
+                return false
+            }
+            override fun onQueryTextSubmit(query: String): Boolean {
+                newsListAdapter.filter.filter(query)
+                return false
+            }
+
+        })
+        searchView.setOnCloseListener {
+            Log.e("close","search_view_closed")
+            return@setOnCloseListener false
+        }
+
+
+        return super.onCreateOptionsMenu(menu)
+    }
+
+   private fun onItemClick(news: NewsResponse.News,pos: Int){
+         Toast.makeText(this,news.title,Toast.LENGTH_SHORT).show()
     }
 }
